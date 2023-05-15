@@ -1,109 +1,36 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <iostream>
-#include <GL/glew.h>
-#include <GL/freeglut.h>
-#include <GLFW/glfw3.h>
-#include <functional>
 #include <string>
-#include <errno.h>
+#include "../Libs/glew-2.1.0/include/GL/glew.h"
+#include "../Libs/freeglut/include/GL/freeglut.h"
+#include "../Libs/glfw-3.3.8.bin.WIN64/include/GLFW/glfw3.h"
+#include "../Libs/glm-0.9.9.8/glm/glm.hpp"
+#include "../Libs/glm-0.9.9.8/glm/gtc/matrix_transform.hpp"
+#include "../Libs/glm-0.9.9.8/glm/gtc/type_ptr.hpp"
 #include "../Include/Globals.h"
 #include "../Include/Control.h"
+#include "../Include/Shader.h"
+#include "../Include/Objects.h"
 
-GLfloat xRotated, yRotated, zRotated;
-GLdouble radius = 1;
+double distance = -3, radius = 2;
+double angleRotMoonFi = 0, angleRotMoonTheta = 0, angleRotMoonAlpha = 10, speedRotMoon = 1;
+double speedRotEarth = 1, angleRotEarth = 0;
 
-//const char* vertshader =
-//"#version 450 core                                                  \n"
-//"layout(location = 0) in vec3 vertexPosition_modelspace;            \n"
-////"uniform mat4 modelmatrix;                                          \n"
-//"void main(){                                                       \n"
-////"  gl_Position = modelmatrix * vec4(vertexPosition_modelspace, 1.0);\n"
-//"  gl_Position = vec4(vertexPosition_modelspace, 1.0);\n"
-//"}";
-////const char* fragshader =
-//"#version 450 core   \n"
-//"out vec3 color;     \n"
-//"uniform vec3 ucolor = vec3(.5,.5,.5);\n"
-//"void main() {       \n"
-//"  color = ucolor;   \n"
-//"}";
+Shader* shader;
 
-const char* vertshader =
-"#version 330 core \n"
-"layout(location = 0) in vec3 aPos; \n"
-"layout(location = 1) in vec3 aColor; \n"
-"layout(location = 2) in vec2 aTexCoord; \n"
-"out vec3 ourColor; \n"
-"out vec2 TexCoord; \n"
-"void main(){\n"
-"	gl_Position = vec4(aPos, 1.0); \n"
-"	ourColor = aColor; \n"
-"	TexCoord = aTexCoord; \n"
-"}";
+Sphere earth(1, 30, 30);
+Sphere moon(0.5, 20, 20);
+Circle circle(1, 48);
 
-const char* fragshader =
-"#version 330 core\n"
-"out vec4 FragColor; \n"
-"in vec3 ourColor; \n"
-"in vec2 TexCoord; \n"
-"uniform sampler2D ourTexture; \n"
-"void main(){\n"
-"	FragColor = texture(ourTexture, TexCoord); \n"
-"}\n";
-
+glm::mat4 projectionMat;
 
 int main_window;
 MouseState mouseState;
 
-
 void display();
 void reshape(int x, int y);
 void idle(int);
-GLuint loadTexture(const char* filename);
-static GLuint LoadShader(const char* vertexshader, const char* fragmentshader);
-
-void drawBox(GLfloat size, GLenum type)
-{
-	static GLfloat n[6][3] =
-	{
-	  {-1.0, 0.0, 0.0},
-	  {0.0, 1.0, 0.0},
-	  {1.0, 0.0, 0.0},
-	  {0.0, -1.0, 0.0},
-	  {0.0, 0.0, 1.0},
-	  {0.0, 0.0, -1.0}
-	};
-	static GLint faces[6][4] =
-	{
-	  {0, 1, 2, 3},
-	  {3, 2, 6, 7},
-	  {7, 6, 5, 4},
-	  {4, 5, 1, 0},
-	  {5, 6, 2, 1},
-	  {7, 4, 0, 3}
-	};
-	GLfloat v[8][3];
-	GLint i;
-
-	v[0][0] = v[1][0] = v[2][0] = v[3][0] = -size / 2;
-	v[4][0] = v[5][0] = v[6][0] = v[7][0] = size / 2;
-	v[0][1] = v[1][1] = v[4][1] = v[5][1] = -size / 2;
-	v[2][1] = v[3][1] = v[6][1] = v[7][1] = size / 2;
-	v[0][2] = v[3][2] = v[4][2] = v[7][2] = -size / 2;
-	v[1][2] = v[2][2] = v[5][2] = v[6][2] = size / 2;
-
-	for (i = 5; i >= 0; i--) {
-		glBegin(type);
-		glNormal3fv(&n[i][0]);
-		glVertex3fv(&v[faces[i][0]][0]);
-		glVertex3fv(&v[faces[i][1]][0]);
-		glVertex3fv(&v[faces[i][2]][0]);
-		glVertex3fv(&v[faces[i][3]][0]);
-		glEnd();
-	}
-}
-
 
 
 //wrapper for subwindows
@@ -133,6 +60,7 @@ public:
 	virtual void reshape(int x, int y) {};
 };
 
+//class where will draw scene
 class CanvasWindow : public SubWindow {
 public:
 	CanvasWindow(int mainWindow, float widthCoef, float heightCoef, float xCoef, float yCoef)
@@ -141,54 +69,45 @@ public:
 
 	CanvasWindow() {};
 
-	void display() override{
+	void display() override {
 		glutSetWindow(thisWindow);
-		glMatrixMode(GL_MODELVIEW);
+		//auto a = glGetError();
+
 		// clear the drawing buffer.
 		glClearColor(0.04, 0.04, 0.04, 1);
-		glClear(GL_COLOR_BUFFER_BIT);
-		// clear the identity matrix.
-		glLoadIdentity();
-		// traslate the draw by z = -4.0
-		// Note this when you decrease z like -8.0 the drawing will looks far , or smaller.
-		glTranslatef(0.0, 0.0, -5.0);
-		// Red color used to draw.
-		//glColor4f(1, 1, 1, 0.5);
-		// changing in transformation matrix.
-		// rotation about X axis
-		glRotatef(xRotated, 1.0, 0.0, 0.0);
-		// rotation about Y axis
-		glRotatef(yRotated, 0.0, 1.0, 0.0);
-		// rotation about Z axis
-		glRotatef(zRotated, 0.0, 0.0, 1.0);
-		// scaling transfomation 
-		glScalef(1.0, 1.0, 1.0);
-		
-		glEnable(GL_TEXTURE_2D);
 
-		GLuint texture = loadTexture("Images/1.bmp");
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glBindTexture(GL_TEXTURE_2D, texture);
-
-		//glutSolidTeapot(radius);
-		drawBox(radius, GL_QUADS);
+		earth.setRotation(glm::vec3{ 0,angleRotEarth,0 });
+		earth.setPosition({ 0,0,distance });
+		earth.draw();
 
 
+		glm::vec4 coordMoon(0, 0, 0, 0);
+		coordMoon.x = cos(glm::radians(angleRotMoonFi));
+		coordMoon.z = sin(glm::radians(angleRotMoonFi));
 
-		//glEnable(GL_TEXTURE_GEN_S); //enable texture coordinate generation
-		//glEnable(GL_TEXTURE_GEN_T);
-		//glBindTexture(GL_TEXTURE_2D, texture);
-		//glutSolidSphere(radius, 10, 10);
-		//glDisable(GL_TEXTURE_GEN_S); //enable texture coordinate generation
-		//glDisable(GL_TEXTURE_GEN_T);
+		auto matMoon = glm::identity<glm::mat4>();
+		matMoon = glm::rotate(matMoon, (float)glm::radians(angleRotMoonAlpha), glm::vec3(1, 0, 0));
+		matMoon = glm::rotate(matMoon, (float)glm::radians(angleRotMoonTheta), glm::vec3(0, 0, 1));
+		matMoon = glm::scale(matMoon, { radius,radius,radius });
+		coordMoon = matMoon * coordMoon;
 
-		// built-in (glut library) function , draw you a sphere.
-		//glutWireSphere(radius, 20, 20);
-		//glutWireSphere(radius / 2, 10, 10);
-		// Flush buffers to screen
-		xRotated += 1;
+		moon.setPosition({ coordMoon.x, coordMoon.y, distance + coordMoon.z });
+		moon.setRotation(glm::vec3{ 0,radius,0 });
+		moon.draw();
+
+		circle.setPosition({ 0,0,distance });
+		circle.setRotation({ 90+ angleRotMoonAlpha,angleRotMoonTheta,0 });
+		circle.setScale({ radius,radius,radius });
+		circle.draw();
+
+		angleRotMoonFi += speedRotMoon/radius;
+		angleRotMoonFi = angleRotMoonFi > 360 ? 0 : angleRotMoonFi;
+		angleRotEarth += speedRotEarth;
+		angleRotEarth = speedRotEarth > 360 ? 0 : angleRotEarth;
 	}
-	void reshape(int x, int y) override{
+	void reshape(int x, int y) override {
 		if (y == 0 || x == 0) return;
 		glutSetWindow(thisWindow);
 		glutPositionWindow(x * xCoef, y * yCoef);
@@ -198,10 +117,9 @@ public:
 
 		glutReshapeWindow(x, y);
 
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
-		gluPerspective(90, (GLdouble)x / (GLdouble)y, 0.1, 100);
-		glMatrixMode(GL_MODELVIEW);
+		projectionMat = glm::perspective<float>(glm::radians(100.), x / (float)y, 0.1, 100);
+		glUniformMatrix4fv(glGetUniformLocation(shader->getProgramID(), "projection"), 1, GL_FALSE, glm::value_ptr(projectionMat));
+
 		glViewport(0, 0, x, y);
 	}
 };
@@ -211,26 +129,38 @@ public:
 class MenuWindow : public SubWindow {
 private:
 	Controls controls; //all buttons
-	TextBoxDouble textBox;
+	std::list<TextBox*> textBoxes;
 
 	int baseWidth, baseHeight;
 	static void plusOne(GLdouble& a) { a += 1; }
 	static void minusOne(GLdouble& a) { a -= 1; }
+	void createButtonConnectedVar(int x, int y, std::string label, double* var) {
+		ButtonControl* button;
+		TextBox* textBox;
+
+		button = new ButtonControl(x, y, 20, 20, "-");
+		button->onClick(minusOne, var);
+		controls.addControl(button);
+
+		button = new ButtonControl(x + 30, y, 20, 20, "+");
+		button->onClick(plusOne, var);
+		controls.addControl(button);
+
+		textBox = new TextBoxDouble(x + 60, y + 18, label, var);
+		textBoxes.push_back(textBox);
+	}
 public:
 	MenuWindow(int mainWindow, float widthCoef, float heightCoef, float xCoef, float yCoef)
 		: SubWindow(mainWindow, widthCoef, heightCoef, xCoef, yCoef) {
 		controls = Controls();
-		ButtonControl* button;
 
-		button = new ButtonControl(30, 30, 20, 20, "-");
-		button->onClick(minusOne, &radius);
-		controls.addControl(button);
-
-		button = new ButtonControl(60, 30, 20, 20, "+");
-		button->onClick(plusOne,&radius);
-		controls.addControl(button);
-
-		textBox = TextBoxDouble(90, 48, "qwerty %.2f", &radius);
+		int i = 1;
+		createButtonConnectedVar(30, 30 * i++, "Radius %.2f", &radius);
+		createButtonConnectedVar(30, 30 * i++, "Distance %.2f", &distance);
+		createButtonConnectedVar(30, 30 * i++, "Angle 1 Moon %.2f", &angleRotMoonTheta);
+		createButtonConnectedVar(30, 30 * i++, "Angle 2 Moon %.2f", &angleRotMoonAlpha);
+		createButtonConnectedVar(30, 30 * i++, "Speed Earth %.2f", &speedRotEarth);
+		createButtonConnectedVar(30, 30 * i++, "Speed Moon %.2f", &speedRotMoon);
 
 		//MouseState::addControls(&this->controls);
 		glutMouseFunc(mouseState.setMouseState);
@@ -247,7 +177,7 @@ public:
 	Controls* getControls() { return &controls; }
 
 	void display() override {
-		glutSetWindow(thisWindow); 
+		glutSetWindow(thisWindow);
 		glMatrixMode(GL_PROJECTION);
 		glPushMatrix();
 		glLoadIdentity();
@@ -260,10 +190,13 @@ public:
 		glClearColor(0.2, 0.2, 0.3, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		glTranslatef(0, baseHeight-glutGet(GLUT_WINDOW_HEIGHT), 0);
+		glTranslatef(0, baseHeight - glutGet(GLUT_WINDOW_HEIGHT), 0);
 
 		controls.drawControls();
-		textBox.drawText();
+
+		for (auto i : textBoxes) {
+			i->drawText();
+		}
 
 
 	}
@@ -288,18 +221,28 @@ int main(int argc, char** argv)
 	glutInitWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	main_window = glutCreateWindow("Planet");
+
+	glewInit();
+
+	//glutSetOption(GLUT_RENDERING_CONTEXT, GLUT_CREATE_NEW_CONTEXT);
 	canvas = CanvasWindow(main_window, 0.7, 1, 0, 0);
+	shader = new Shader("../Shaders/shader.vert", "../Shaders/shader.frag");
+	shader->use();
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_TEXTURE_2D);
+
+	earth.init(shader->getProgramID());
+	moon.init(shader->getProgramID());
+	circle.init(shader->getProgramID());
+	circle.setPosition({ 0,0,-30 });
+
+	earth.setTexture("../Images/Earth.bmp", 2048, 1024);
+	moon.setTexture("../Images/Moon.bmp", 1024, 512);
+
+
 	menu = MenuWindow(main_window, 0.3, 1, 0.7, 0);
 
 	MouseState::addControls(menu.getControls());
-
-	glewInit();
-	LoadShader(vertshader, fragshader); 
-
-
-	xRotated = yRotated = zRotated = 30.0;
-	xRotated = 43;
-	yRotated = FPS;
 
 	glutSetWindow(main_window);
 	glutDisplayFunc(display);
@@ -329,111 +272,4 @@ void reshape(int x, int y)
 void idle(int a) {
 	glutPostRedisplay();
 	glutTimerFunc(1000.0 / FPS, idle, 0);
-}
-
-GLuint loadTexture(const char* filename)
-{
-	GLuint texture;
-	int width, height;
-	unsigned char* data;
-
-	FILE* file;
-	auto a = fopen_s(&file, filename, "rb");
-	//std::cout<<strerror(a);
-	//fopen(filename, "rb");
-
-	if (file == NULL) return 0;
-	width = 312;
-	height = 124;
-	data = (unsigned char*)malloc(width * height * 3);
-	//int size = fseek(file,);
-	fread(data, width * height * 3, 1, file);
-	fclose(file);
-
-	for (int i = 0; i < width * height; ++i)
-	{
-		int index = i * 3;
-		unsigned char B, R;
-		B = data[index];
-		R = data[index + 2];
-
-		data[index] = R;
-		data[index + 2] = B;
-	}
-
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
-
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	gluBuild2DMipmaps(GL_TEXTURE_2D, 3, width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
-	free(data);
-
-	return texture;
-}
-
-static GLuint LoadShader(const char* vertexshader, const char* fragmentshader) {
-
-	// Create the shaders
-	GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
-	GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
-
-	GLint Result = GL_FALSE;
-	int InfoLogLength;
-
-	// Compile Vertex Shader
-	glShaderSource(VertexShaderID, 1, &vertexshader, NULL);
-	glCompileShader(VertexShaderID);
-
-	// Check Vertex Shader
-	glGetShaderiv(VertexShaderID, GL_COMPILE_STATUS, &Result);
-	glGetShaderiv(VertexShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-	//if (InfoLogLength > 0) {
-	//	std::vector<char> VertexShaderErrorMessage(InfoLogLength + 1);
-	//	glGetShaderInfoLog(VertexShaderID, InfoLogLength, NULL, &VertexShaderErrorMessage[0]);
-	//	printf("%s\n", &VertexShaderErrorMessage[0]);
-	//}
-
-	// Compile Fragment Shader
-	//printf("Compiling shader : %s\n", fragment_file_path);
-	//char const * FragmentSourcePointer = FragmentShaderCode.c_str();
-	//glShaderSource(FragmentShaderID, 1, &FragmentSourcePointer , NULL);
-	glShaderSource(FragmentShaderID, 1, &fragmentshader, NULL);
-	glCompileShader(FragmentShaderID);
-
-	// Check Fragment Shader
-	glGetShaderiv(FragmentShaderID, GL_COMPILE_STATUS, &Result);
-	glGetShaderiv(FragmentShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-	//if (InfoLogLength > 0) {
-	//	std::vector<char> FragmentShaderErrorMessage(InfoLogLength + 1);
-	//	glGetShaderInfoLog(FragmentShaderID, InfoLogLength, NULL, &FragmentShaderErrorMessage[0]);
-	//	printf("%s\n", &FragmentShaderErrorMessage[0]);
-	//}
-
-	// Link the program
-	//printf("Linking program\n");
-	GLuint ProgramID = glCreateProgram();
-	glAttachShader(ProgramID, VertexShaderID);
-	glAttachShader(ProgramID, FragmentShaderID);
-	glLinkProgram(ProgramID);
-
-	// Check the program
-	glGetProgramiv(ProgramID, GL_LINK_STATUS, &Result);
-	glGetProgramiv(ProgramID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-	//if (InfoLogLength > 0) {
-	//	std::vector<char> ProgramErrorMessage(InfoLogLength + 1);
-	//	glGetProgramInfoLog(ProgramID, InfoLogLength, NULL, &ProgramErrorMessage[0]);
-	//	printf("%s\n", &ProgramErrorMessage[0]);
-	//}
-
-	glDetachShader(ProgramID, VertexShaderID);
-	glDetachShader(ProgramID, FragmentShaderID);
-
-	glDeleteShader(VertexShaderID);
-	glDeleteShader(FragmentShaderID);
-
-	return ProgramID;
 }

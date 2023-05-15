@@ -86,9 +86,9 @@ void ButtonControl::click() {
 //}
 
 
-void ButtonControl::onClick(void(*func)(GLdouble&), GLdouble* val)
+void ButtonControl::onClick(void(*func)(double&), double* val)
 {
-	this->func = std::function<void(GLdouble&)>(func);
+	this->func = std::function<void(double&)>(func);
 	this->val = val;
 }
 

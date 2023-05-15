@@ -4,9 +4,9 @@
 #include <iostream>
 #include <functional>
 #include <utility>
-#include <GL/glew.h>
-#include <GL/freeglut.h>
-#include <GLFW/glfw3.h>
+#include "../Libs/glew-2.1.0/include/GL/glew.h"
+#include "../Libs/freeglut/include/GL/freeglut.h"
+#include "../Libs/glfw-3.3.8.bin.WIN64/include/GLFW/glfw3.h"
 
 class Controls;
 
@@ -48,16 +48,16 @@ private:
 	bool active;
 	bool prevActive; //previous frame active of button
 	std::string label;
-	GLdouble* val;
+	double* val;
 	//void(*func)(GLdouble&) = nullptr;
-	std::function<void(GLdouble&)> func;
+	std::function<void(double&)> func;
 public:
 	ButtonControl(int x, int y, int width, int height, std::string label);
 	void updateControl();
 	void drawControl();
 	void click();
 
-	void onClick(void(*func)(GLdouble&), GLdouble* val);
+	void onClick(void(*func)(double&), double* val);
 };
 
 
@@ -70,7 +70,7 @@ protected:
 public:
 	TextBox(int x, int y, std::string label);
 	TextBox() {};
-	void drawText();
+	virtual void drawText();
 };
 
 class TextBoxDouble : public TextBox {
